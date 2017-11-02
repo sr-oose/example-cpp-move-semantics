@@ -2,12 +2,15 @@
 
 struct Data {
 	int value {42};
+	static int instances;
 
 	Data(){
+		Data::instances++;
 		std::cout << "Data created" << std::endl;
 	}
 
 	~Data(){
+		Data::instances--;
 		std::cout << "Data destroyed" << std::endl;
 	}
 
@@ -17,6 +20,7 @@ struct Data {
 	Data& operator=(Data&& other) = default;
 };
 
+int Data::instances {0};
 
 struct NonMoveable {
 	Data* data;
@@ -50,7 +54,7 @@ struct NonMoveable {
 
 struct Moveable {
 	Data* data;
-	bool invalid = false;
+	bool dataIsExternal = false;
 
 	Moveable(){
 		std::cout << "Moveable default constructor" << std::endl;
@@ -65,50 +69,68 @@ struct Moveable {
 	Moveable(Moveable&& other){
 		std::cout << "Moveable move constructor" << std::endl;
 		data = other.data;
-		other.invalid = true;
+		other.dataIsExternal = true;
 	}
 
 	Moveable& operator=(const Moveable& other) {
 		std::cout << "Moveable copy assignment" << std::endl;
 		*data = *other.data;
+		dataIsExternal = false;
 		return *this;
 	}
 
 	Moveable& operator=(Moveable&& other){
 		std::cout << "Moveable move assignment" << std::endl;
+		if (!dataIsExternal) delete data;
 		data = other.data;
-		other.invalid = true;
+		other.dataIsExternal = true;
+		dataIsExternal = false;
 		return *this;
 	}
 
 	~Moveable() {
 		std::cout << "Moveable destructor" << std::endl;
-		if (!invalid) delete data;
+		if (!dataIsExternal) delete data;
 	}
 };
 
 template<typename T> T returnByValue(T t){
+	std::cout << "-> returnByValue(T) called" << std::endl;
 	return t;
 }
+
+template<typename T> T factory(){
+	std::cout << "-> factory() called" << std::endl;
+	return T{};
+}
+
 
 using namespace std;
 
 int main(int argc, char** argv){
+
 	cout << "====Without move constructor====\n";
 	{
-	NonMoveable nonMoveable{};
-	NonMoveable nonMoveable2 = returnByValue<NonMoveable>(nonMoveable);
+		NonMoveable nonMoveable{};
+		NonMoveable nonMoveable2 = returnByValue(nonMoveable);
+		nonMoveable = nonMoveable2;
+		nonMoveable = factory<NonMoveable>();
+		cout << "------Before end of block-------\n";
 	}
 	cout << "====With move constructor====\n";
 	{
-	Moveable moveable{};
-	Moveable moveable2 = returnByValue<Moveable>(moveable);
+		Moveable moveable{};
+		Moveable moveable2 = returnByValue(moveable);
+		moveable = factory<Moveable>();
+		cout << "------Before end of block-------\n";
 	}
 	cout << "====Forcing move for function call====\n";
 	{
-	Moveable moveable{};
-	Moveable moveable2 = returnByValue<Moveable>(std::move(moveable));
-	//Do not use variable "moveable" anymore!
+		Moveable moveable{};
+		Moveable moveable2 = returnByValue(std::move(moveable));
+		//Do not use variable "moveable" anymore!
+		moveable = factory<Moveable>();
+		cout << "------Before end of block-------\n";
 	}
 	return 0;
 }
